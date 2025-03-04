@@ -8,6 +8,7 @@ import {
   deleteDoc,
   doc,
   updateDoc,
+  query,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
@@ -39,26 +40,47 @@ import {
 import { LoaderCircleIcon } from "lucide-react";
 import { cn } from "./lib/utils";
 
+const formSchema = todoSchema.pick({ priority: true, title: true });
+const todosFromStoreSchema = z.array(todoSchema);
+
 function Todos() {
-  const [todos, setTodos] = useState<TodoEntity[]>();
+  const [todos, setTodos] = useState<TodoEntity[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const userId = useUserId();
 
   useEffect(() => {
+    setIsLoading(true);
+
     if (!userId) {
+      setIsLoading(false);
       return;
     }
 
-    const _unsubscribe = onSnapshot(
+    const unsubscribe = onSnapshot(
+      // Maybe order by priority and limit for pagination
       collection(db, "users", userId, "todos"),
       (collection) => {
-        // NOTE: types are wrong here
-        const todos = collection.docs.map((doc) => ({
+        const todosFromStore = collection.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
-        })) as Todo[];
-        setTodos(todos);
+        }));
+        const todosData = todosFromStoreSchema.safeParse(todosFromStore);
+
+        if (!todosData.success) {
+          console.error("Invalid todo data", todosData.error);
+          throw new Error("Invalid todo data");
+        }
+
+        setTodos(todosData.data);
+        setIsLoading(false);
+      },
+      (error) => {
+        console.error(error);
+        throw new Error(error.message);
       },
     );
+
+    return unsubscribe;
   }, [userId]);
 
   const form = useForm({
@@ -67,7 +89,7 @@ function Todos() {
       priority: "medium",
     },
     validators: {
-      onSubmit: todoSchema,
+      onSubmit: formSchema,
     },
     onSubmit: async ({ value }) => {
       // @ts-expect-error unsure why priortity is widened to a string, might be a bug in tanstack/form
@@ -75,7 +97,7 @@ function Todos() {
     },
   });
 
-  if (!userId) {
+  if (!userId || isLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
         <LoaderCircleIcon className="w-10 h-10 animate-spin" />
@@ -87,9 +109,7 @@ function Todos() {
     if (!userId) {
       return;
     }
-    await new Promise((resolve) => {
-      setTimeout(resolve, 1000);
-    });
+
     await addDoc(collection(db, "users", userId, "todos"), {
       title: value.title,
       completed: false,
@@ -101,25 +121,26 @@ function Todos() {
     });
   }
 
-  function onRemoveTodo(todoId: string) {
-    if (!userId) {
-      return;
-    }
+  async function onRemoveTodo(todoId: string) {
+    if (!userId || !todoId) return;
 
-    deleteDoc(doc(db, "users", userId, "todos", todoId));
+    await deleteDoc(doc(db, "users", userId, "todos", todoId));
   }
 
-  function onCompleteTodo(todoId: string) {
-    if (!userId) {
+  async function onCompleteTodo(todoId: string) {
+    if (!userId || !todoId) {
       return;
     }
 
-    updateDoc(doc(db, "users", userId, "todos", todoId), {
-      completed: true,
+    const todo = todos.find((t) => t.id === todoId);
+    if (!todo) return;
+
+    await updateDoc(doc(db, "users", userId, "todos", todoId), {
+      completed: !todo.completed,
     });
   }
 
-  const completedTodos = todos?.filter((todo) => todo.completed);
+  const completedTodos = todos.filter((todo) => todo.completed);
 
   return (
     <Card className="w-full md:w-[60%] mx-auto">
@@ -136,7 +157,7 @@ function Todos() {
           </TabsList>
           <TabsContent value={"all"}>
             <ul>
-              {todos?.map((todo) => (
+              {todos.map((todo) => (
                 <Todo
                   key={todo.id}
                   todo={todo}
@@ -148,7 +169,7 @@ function Todos() {
           </TabsContent>
           <TabsContent value={"completed"}>
             <ul className={"list-none space-y-2"}>
-              {completedTodos?.map((todo) => (
+              {completedTodos.map((todo) => (
                 <Todo
                   key={todo.id}
                   todo={todo}
@@ -168,7 +189,7 @@ function Todos() {
           }}
           className="w-full"
         >
-          <div className="flex gap-2 w-full mt-4">
+          <div className="flex flex-col md:flex-row gap-2 w-full mt-4">
             <form.Field name="title">
               {(field) => (
                 <div className="flex-1">
@@ -190,7 +211,7 @@ function Todos() {
             </form.Field>
             <form.Field name="priority">
               {(field) => (
-                <div className="w-max">
+                <div className="w-full md:w-max">
                   <Select
                     name={field.name}
                     value={field.state.value}

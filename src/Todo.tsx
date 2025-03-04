@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react";
-
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Trash2Icon } from "lucide-react";
 import { z } from "zod";
 
 export const todoSchema = z.object({
+  id: z.string(),
   title: z.string().min(1, "Title is required"),
   priority: z.enum(["high", "medium", "low"], {
     errorMap: (issue, ctx) => {
@@ -20,11 +19,11 @@ export const todoSchema = z.object({
       };
     },
   }),
+  completed: z.boolean().optional(),
 });
 
 export type TodoEntity = {
   id: string;
-  completed: boolean;
 } & z.infer<typeof todoSchema>;
 
 type TodoProps = {
