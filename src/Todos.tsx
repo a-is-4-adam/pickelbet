@@ -40,7 +40,6 @@ type Todo = {
 
 function Todos() {
   const [todos, setTodos] = useState<Todo[]>();
-  const [completedTodos, setCompletedTodos] = useState<Todo[]>([]);
   const userId = useUserId();
   const [newTask, setNewTask] = useState("");
   const [newTaskPriority, setNewTaskPriority] = useState("medium");
@@ -96,13 +95,7 @@ function Todos() {
     );
   }, [userId]);
 
-  useEffect(() => {
-    if (!todos) {
-      return;
-    }
-
-    setCompletedTodos(todos.filter((todo) => todo.completed));
-  }, [todos]);
+  const completedTodos = todos?.filter((todo) => todo.completed);
 
   return (
     <Card className="w-full md:w-[60%] mx-auto">
