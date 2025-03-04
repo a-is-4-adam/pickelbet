@@ -124,6 +124,13 @@ function Todos() {
       onAddTodo(value);
     },
   });
+  if (!userId) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <LoaderCircleIcon className="w-10 h-10 animate-spin" />
+      </div>
+    );
+  }
 
   const completedTodos = todos?.filter((todo) => todo.completed);
 
