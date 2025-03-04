@@ -63,7 +63,12 @@ function Todo({ todo, onRemove, onComplete }: TodoProps) {
       >
         {todo.priority}
       </div>
-      <Button variant="ghost" size="icon" onClick={() => onRemove(todo.id)}>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => onRemove(todo.id)}
+        aria-label={`Remove ${todo.title}`}
+      >
         <Trash2Icon className="w-4 h-4" />
       </Button>
     </li>

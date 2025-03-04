@@ -196,6 +196,7 @@ function Todos() {
                   <Input
                     type="text"
                     placeholder="Add a new task"
+                    aria-label="Add a new task"
                     name={field.name}
                     value={field.state.value}
                     aria-describedby={
@@ -215,6 +216,7 @@ function Todos() {
                   <Select
                     name={field.name}
                     value={field.state.value}
+                    aria-label="Priority"
                     aria-describedby={
                       isFieldInvalid(field)
                         ? buildFieldErrorId(field)
