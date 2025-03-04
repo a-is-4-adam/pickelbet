@@ -1,3 +1,5 @@
+import { useForm, useStore } from "@tanstack/react-form";
+import { z } from "zod";
 import { db } from "@/store";
 import {
   collection,
@@ -26,37 +28,51 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-
 import Todo from "@/Todo";
 
 import useUserId from "@/hooks/useUser";
+import {
+  buildFieldErrorId,
+  FieldInfo,
+  isFieldInvalid,
+} from "./components/ui/field";
+
+const todoSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  priority: z.enum(["high", "medium", "low"], {
+    errorMap: (issue, ctx) => {
+      if (issue.code === z.ZodIssueCode.invalid_enum_value) {
+        return {
+          message: "Priority must be one of: high, medium, low",
+        };
+      }
+
+      return {
+        message: ctx.defaultError,
+      };
+    },
+  }),
+});
 
 type Todo = {
   id: string;
-  title: string;
   completed: boolean;
-  priority: "high" | "medium" | "low";
-};
+} & z.infer<typeof todoSchema>;
 
 function Todos() {
   const [todos, setTodos] = useState<Todo[]>();
   const userId = useUserId();
-  const [newTask, setNewTask] = useState("");
-  const [newTaskPriority, setNewTaskPriority] = useState("medium");
 
-  function onAddTodo() {
+  function onAddTodo(value: z.infer<typeof todoSchema>) {
     if (!userId) {
       return;
     }
 
     addDoc(collection(db, "users", userId, "todos"), {
-      title: newTask,
+      title: value.title,
       completed: false,
-      priority: newTaskPriority,
+      priority: value.priority,
     });
-
-    setNewTask("");
-    setNewTaskPriority("medium");
   }
 
   function onRemoveTodo(todoId: string) {
@@ -95,7 +111,24 @@ function Todos() {
     );
   }, [userId]);
 
+  const form = useForm({
+    defaultValues: {
+      title: "",
+      priority: "medium",
+    },
+    validators: {
+      onSubmit: todoSchema,
+    },
+    onSubmit: ({ value }) => {
+      // @ts-expect-error unsure why priortity is widened to a string, might be a bug in tanstack/form
+      onAddTodo(value);
+    },
+  });
+
   const completedTodos = todos?.filter((todo) => todo.completed);
+
+  const formErrors = useStore(form.store, (formState) => formState.errors);
+  console.log("🚀 ~ Todos ~ formErrors:", formErrors);
 
   return (
     <Card className="w-full md:w-[60%] mx-auto">
@@ -124,7 +157,7 @@ function Todos() {
           </TabsContent>
           <TabsContent value={"completed"}>
             <ul className={"list-none space-y-2"}>
-              {completedTodos.map((todo) => (
+              {completedTodos?.map((todo) => (
                 <Todo
                   key={todo.id}
                   todo={todo}
@@ -136,28 +169,68 @@ function Todos() {
           </TabsContent>
         </Tabs>
 
-        <div className="flex gap-2 w-full mt-4">
-          <Input
-            type="text"
-            placeholder="Add a new task"
-            value={newTask}
-            onChange={(e) => setNewTask(e.target.value)}
-            className="flex-1"
-          />
-          <div>
-            <Select value={newTaskPriority} onValueChange={setNewTaskPriority}>
-              <SelectTrigger>
-                <SelectValue placeholder="Priority" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="high">High</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="low">Low</SelectItem>
-              </SelectContent>
-            </Select>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            form.handleSubmit();
+          }}
+          className="w-full"
+        >
+          <div className="flex gap-2 w-full mt-4">
+            <form.Field name="title">
+              {(field) => (
+                <div className="flex-1">
+                  <Input
+                    type="text"
+                    placeholder="Add a new task"
+                    name={field.name}
+                    value={field.state.value}
+                    aria-describedby={
+                      isFieldInvalid(field)
+                        ? buildFieldErrorId(field)
+                        : undefined
+                    }
+                    onChange={(e) => field.handleChange(e.target.value)}
+                  />
+                  <FieldInfo field={field} />
+                </div>
+              )}
+            </form.Field>
+            <form.Field name="priority">
+              {(field) => (
+                <div className="w-max">
+                  <Select
+                    name={field.name}
+                    value={field.state.value}
+                    aria-describedby={
+                      isFieldInvalid(field)
+                        ? buildFieldErrorId(field)
+                        : undefined
+                    }
+                    onValueChange={(value) =>
+                      field.handleChange(
+                        value as z.infer<typeof todoSchema>["priority"],
+                      )
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="low">Low</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FieldInfo field={field} />
+                </div>
+              )}
+            </form.Field>
+
+            <Button type="submit">Add</Button>
           </div>
-          <Button onClick={onAddTodo}>Add</Button>
-        </div>
+        </form>
       </CardFooter>
     </Card>
   );
