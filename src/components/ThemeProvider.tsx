@@ -1,6 +1,9 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useLayoutEffect, useState } from "react";
+import { z } from "zod";
 
-type Theme = "dark" | "light" | "system";
+const themeSchema = z.enum(["dark", "light", "system"]);
+
+type Theme = z.infer<typeof themeSchema>;
 
 type ThemeProviderProps = {
   children: React.ReactNode;
@@ -24,13 +27,19 @@ export function ThemeProvider({
   children,
   defaultTheme = "system",
   storageKey = "vite-ui-theme",
-  ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme,
-  );
+  const [theme, setTheme] = useState<Theme>(() => {
+    const storedTheme = localStorage.getItem(storageKey);
+    const parsedTheme = themeSchema.safeParse(storedTheme);
 
-  useEffect(() => {
+    if (parsedTheme.success) {
+      return parsedTheme.data;
+    }
+
+    return defaultTheme;
+  });
+
+  useLayoutEffect(() => {
     const root = window.document.documentElement;
 
     root.classList.remove("light", "dark");
@@ -57,17 +66,8 @@ export function ThemeProvider({
   };
 
   return (
-    <ThemeProviderContext.Provider {...props} value={value}>
+    <ThemeProviderContext.Provider value={value}>
       {children}
     </ThemeProviderContext.Provider>
   );
 }
-
-export const useTheme = () => {
-  const context = useContext(ThemeProviderContext);
-
-  if (context === undefined)
-    throw new Error("useTheme must be used within a ThemeProvider");
-
-  return context;
-};
