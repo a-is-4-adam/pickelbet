@@ -3,19 +3,37 @@ import { useEffect, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Trash2Icon } from "lucide-react";
+import { z } from "zod";
 
-// eslint-disable-next-line
-function Todo({ todo: externalTodo, onRemove, onComplete }: any) {
-  const [todo, setTodo] = useState<any>(); // eslint-disable-line
+export const todoSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  priority: z.enum(["high", "medium", "low"], {
+    errorMap: (issue, ctx) => {
+      if (issue.code === z.ZodIssueCode.invalid_enum_value) {
+        return {
+          message: "Priority must be one of: high, medium, low",
+        };
+      }
 
-  useEffect(() => {
-    setTodo(externalTodo);
-  }, [externalTodo]);
+      return {
+        message: ctx.defaultError,
+      };
+    },
+  }),
+});
 
-  if (!todo) {
-    return null;
-  }
+export type TodoEntity = {
+  id: string;
+  completed: boolean;
+} & z.infer<typeof todoSchema>;
 
+type TodoProps = {
+  todo: TodoEntity;
+  onRemove: (id: string) => void;
+  onComplete: (id: string) => void;
+};
+
+function Todo({ todo, onRemove, onComplete }: TodoProps) {
   return (
     <li
       className={`flex items-center justify-between rounded-md px-4 py-2 gap-2`}

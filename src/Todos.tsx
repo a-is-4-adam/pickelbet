@@ -1,4 +1,4 @@
-import { useForm, useStore } from "@tanstack/react-form";
+import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
 import { db } from "@/store";
 import {
@@ -28,7 +28,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import Todo from "@/Todo";
+import Todo, { todoSchema, type TodoEntity } from "@/Todo";
 
 import useUserId from "@/hooks/useUser";
 import {
@@ -36,62 +36,12 @@ import {
   FieldInfo,
   isFieldInvalid,
 } from "./components/ui/field";
-
-const todoSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  priority: z.enum(["high", "medium", "low"], {
-    errorMap: (issue, ctx) => {
-      if (issue.code === z.ZodIssueCode.invalid_enum_value) {
-        return {
-          message: "Priority must be one of: high, medium, low",
-        };
-      }
-
-      return {
-        message: ctx.defaultError,
-      };
-    },
-  }),
-});
-
-type Todo = {
-  id: string;
-  completed: boolean;
-} & z.infer<typeof todoSchema>;
+import { LoaderCircleIcon } from "lucide-react";
+import { cn } from "./lib/utils";
 
 function Todos() {
-  const [todos, setTodos] = useState<Todo[]>();
+  const [todos, setTodos] = useState<TodoEntity[]>();
   const userId = useUserId();
-
-  function onAddTodo(value: z.infer<typeof todoSchema>) {
-    if (!userId) {
-      return;
-    }
-
-    addDoc(collection(db, "users", userId, "todos"), {
-      title: value.title,
-      completed: false,
-      priority: value.priority,
-    });
-  }
-
-  function onRemoveTodo(todoId: string) {
-    if (!userId) {
-      return;
-    }
-
-    deleteDoc(doc(db, "users", userId, "todos", todoId));
-  }
-
-  function onCompleteTodo(todoId: string) {
-    if (!userId) {
-      return;
-    }
-
-    updateDoc(doc(db, "users", userId, "todos", todoId), {
-      completed: true,
-    });
-  }
 
   useEffect(() => {
     if (!userId) {
@@ -119,11 +69,12 @@ function Todos() {
     validators: {
       onSubmit: todoSchema,
     },
-    onSubmit: ({ value }) => {
+    onSubmit: async ({ value }) => {
       // @ts-expect-error unsure why priortity is widened to a string, might be a bug in tanstack/form
-      onAddTodo(value);
+      await onAddTodo(value);
     },
   });
+
   if (!userId) {
     return (
       <div className="flex justify-center items-center h-screen">
@@ -132,10 +83,43 @@ function Todos() {
     );
   }
 
-  const completedTodos = todos?.filter((todo) => todo.completed);
+  async function onAddTodo(value: z.infer<typeof todoSchema>) {
+    if (!userId) {
+      return;
+    }
+    await new Promise((resolve) => {
+      setTimeout(resolve, 1000);
+    });
+    await addDoc(collection(db, "users", userId, "todos"), {
+      title: value.title,
+      completed: false,
+      priority: value.priority,
+    });
 
-  const formErrors = useStore(form.store, (formState) => formState.errors);
-  console.log("🚀 ~ Todos ~ formErrors:", formErrors);
+    form.reset(undefined, {
+      keepDefaultValues: true,
+    });
+  }
+
+  function onRemoveTodo(todoId: string) {
+    if (!userId) {
+      return;
+    }
+
+    deleteDoc(doc(db, "users", userId, "todos", todoId));
+  }
+
+  function onCompleteTodo(todoId: string) {
+    if (!userId) {
+      return;
+    }
+
+    updateDoc(doc(db, "users", userId, "todos", todoId), {
+      completed: true,
+    });
+  }
+
+  const completedTodos = todos?.filter((todo) => todo.completed);
 
   return (
     <Card className="w-full md:w-[60%] mx-auto">
@@ -234,8 +218,40 @@ function Todos() {
                 </div>
               )}
             </form.Field>
+            <form.Subscribe selector={(state) => state.isSubmitting}>
+              {(isSubmitting) => (
+                <Button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className={cn(
+                    "grid grid-rows-1 grid-cols-2 place-items-center",
+                  )}
+                >
+                  <span
+                    aria-hidden={!isSubmitting}
+                    className="col-span-full row-span-full"
+                  >
+                    <span className="sr-only">Saving...</span>
+                    <LoaderCircleIcon
+                      className={cn(
+                        "w-4 h-4 animate-spin",
+                        isSubmitting ? "visible" : "invisible",
+                      )}
+                    />
+                  </span>
 
-            <Button type="submit">Add</Button>
+                  <span
+                    className={cn(
+                      "col-span-full row-span-full",
+                      isSubmitting ? "invisible" : "visible",
+                    )}
+                    aria-hidden={isSubmitting}
+                  >
+                    Add
+                  </span>
+                </Button>
+              )}
+            </form.Subscribe>
           </div>
         </form>
       </CardFooter>
